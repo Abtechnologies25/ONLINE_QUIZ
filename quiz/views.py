@@ -94,8 +94,12 @@ def delete_day(request, day):
 @user_passes_test(staff_only)
 def student_detail(request, student_id):
 	student = get_object_or_404(User, id=student_id, is_staff=False)
-	attempts = Attempt.objects.filter(student=student).select_related('category').order_by('category__day', 'category__name')
-	return render(request, 'quiz/student_detail.html', {'student': student, 'attempts': attempts})
+	attempts = Attempt.objects.filter(student=student).select_related('category').order_by('category__day', 'category__id')
+	day_results = build_day_result(attempts)
+	overall_score = sum(day_result['score'] for day_result in day_results.values())
+	overall_total = sum(day_result['total_questions'] for day_result in day_results.values())
+	overall_percentage = round(overall_score / overall_total * 100) if overall_total else 0
+	return render(request, 'quiz/student_detail.html', {'student': student, 'attempts': attempts, 'day_results': day_results, 'overall_score': overall_score, 'overall_total': overall_total, 'overall_percentage': overall_percentage})
 
 
 @login_required
@@ -113,6 +117,38 @@ def add_student(request):
 			messages.success(request, f'Student {username} created successfully.')
 			return redirect('dashboard')
 	return render(request, 'quiz/add_student.html')
+
+
+@login_required
+@user_passes_test(staff_only)
+def edit_student(request, student_id):
+	student = get_object_or_404(User, id=student_id, is_staff=False)
+	if request.method == 'POST':
+		username = request.POST.get('username', '').strip()
+		password = request.POST.get('password', '')
+		if not username:
+			messages.error(request, 'Username is required.')
+		elif User.objects.filter(username=username).exclude(id=student.id).exists():
+			messages.error(request, 'That username already exists.')
+		else:
+			student.username = username
+			if password:
+				student.set_password(password)
+			student.save()
+			messages.success(request, f'Student {username} updated successfully.')
+			return redirect('dashboard')
+	return render(request, 'quiz/edit_student.html', {'student': student})
+
+
+@login_required
+@user_passes_test(staff_only)
+def delete_student(request, student_id):
+	student = get_object_or_404(User, id=student_id, is_staff=False)
+	if request.method == 'POST':
+		username = student.username
+		student.delete()
+		messages.success(request, f'Student {username} deleted successfully.')
+	return redirect('dashboard')
 
 
 @login_required
