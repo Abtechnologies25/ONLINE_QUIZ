@@ -1,5 +1,5 @@
 {% extends 'quiz/base.html' %}
-{% block title %}Create category | Daymark{% endblock %}
+{% block title %}Create category | Quiz{% endblock %}
 {% block content %}
 <div class="narrow"><a class="back-link" href="{% url 'dashboard' %}">← Dashboard</a><div class="form-card"><p class="eyebrow">QUIZ LIBRARY</p><h1>Create a category</h1><p class="muted">Create the day and topic first, then add multiple questions to it.</p><form method="post">{% csrf_token %}<div class="form-row"><label>Category name<input name="name" placeholder="e.g. Python basics" required></label><label>Day number<input type="number" name="day" min="1" placeholder="1" required></label></div><label>Description<textarea name="description" rows="3" placeholder="What will students learn?"></textarea></label><button class="button primary" type="submit">Create category</button></form></div></div>
 {% endblock %}

@@ -1,5 +1,5 @@
 {% extends 'quiz/base.html' %}
-{% block title %}Edit day | Daymark{% endblock %}
+{% block title %}Edit day | Quiz{% endblock %}
 {% block content %}
 <div class="narrow"><a class="back-link" href="{% url 'day_questions' day %}">← Day {{ day }} questions</a><div class="form-card"><p class="eyebrow">QUIZ LIBRARY</p><h1>Edit day</h1><p class="muted">This updates the day number for every category and question under Day {{ day }}.</p><form method="post">{% csrf_token %}<label>Day number<input type="number" name="day" min="1" value="{{ day }}" required></label><button class="button primary" type="submit">Save day</button></form></div></div>
 {% endblock %}

@@ -41,9 +41,9 @@ def build_day_result(attempts):
 def dashboard(request):
 	if request.user.is_staff:
 		students = User.objects.filter(is_staff=False).order_by('username')
-		categories = QuizCategory.objects.all()
+		categories = QuizCategory.objects.all().order_by('id')
 		return render(request, 'quiz/admin_dashboard.html', {'students': students, 'categories': categories})
-	categories = QuizCategory.objects.filter(is_active=True).prefetch_related('questions')
+	categories = QuizCategory.objects.filter(is_active=True).prefetch_related('questions').order_by('id')
 	student_attempts = list(Attempt.objects.filter(student=request.user).select_related('category'))
 	attempts = {attempt.category_id: attempt for attempt in student_attempts}
 	return render(request, 'quiz/student_dashboard.html', {'categories': categories, 'attempts': attempts, 'day_results': build_day_result(student_attempts)})
@@ -52,7 +52,7 @@ def dashboard(request):
 @login_required
 @user_passes_test(staff_only)
 def day_questions(request, day):
-	categories = QuizCategory.objects.filter(day=day).prefetch_related('questions')
+	categories = QuizCategory.objects.filter(day=day).prefetch_related('questions').order_by('id')
 	if not categories.exists():
 		return redirect('dashboard')
 	return render(request, 'quiz/day_questions.html', {'day': day, 'categories': categories})

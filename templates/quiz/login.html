@@ -1,8 +1,8 @@
 {% extends 'quiz/base.html' %}
-{% block title %}Sign in | Daymark{% endblock %}
+{% load static %}
+{% block title %}Sign in | Quiz{% endblock %}
 {% block content %}
-<section class="auth-layout">
-  <div class="intro-panel"><p class="eyebrow">QUIZ MANAGEMENT</p><h1>Knowledge, measured one day at a time.</h1><p class="muted">A focused space for administrators to build assessments and students to track their progress.</p></div>
-  <form method="post" class="form-card">{% csrf_token %}<h2>Welcome back</h2><p class="muted">Use your assigned username and password.</p>{{ form.non_field_errors }}<label>Username{{ form.username }}</label><label>Password{{ form.password }}</label><button class="button primary" type="submit">Sign in <span>→</span></button></form>
+<section class="auth-layout login-centered">
+  <form method="post" class="form-card login-form">{% csrf_token %}<img class="login-logo" src="{% static 'images/ABT_LOGO_BLACK_NO_BG.png' %}" alt="AB Technologies logo"><label>Username{{ form.username }}</label><label>Password{{ form.password }}</label><button class="button primary" type="submit">Sign in <span>→</span></button>{{ form.non_field_errors }}</form>
 </section>
 {% endblock %}

@@ -1,4 +1,4 @@
-# Daymark Quiz
+# Quiz
 
 A Django quiz platform with separate staff and student dashboards.
 

@@ -10,7 +10,7 @@ class QuizCategory(models.Model):
 	created_at = models.DateTimeField(auto_now_add=True)
 
 	class Meta:
-		ordering = ['day', 'name']
+		ordering = ['id']
 		verbose_name_plural = 'Quiz categories'
 
 	def __str__(self):
