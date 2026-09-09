@@ -5,7 +5,7 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import Attempt, Question, QuizCategory
@@ -41,19 +41,8 @@ def build_day_result(attempts):
 def dashboard(request):
 	if request.user.is_staff:
 		students = User.objects.filter(is_staff=False).order_by('username')
-		attempts = list(Attempt.objects.select_related('student', 'category').order_by('student__username', 'category__day'))
-		day_results = defaultdict(lambda: {'score': 0, 'total_questions': 0})
-		for attempt in attempts:
-			key = (attempt.student_id, attempt.category.day)
-			day_result = day_results[key]
-			day_result['student'] = attempt.student
-			day_result['day'] = attempt.category.day
-			day_result['score'] += attempt.score
-			day_result['total_questions'] += attempt.total_questions
-		for day_result in day_results.values():
-			total_questions = day_result['total_questions']
-			day_result['percentage'] = round(day_result['score'] / total_questions * 100) if total_questions else 0
-		return render(request, 'quiz/admin_dashboard.html', {'students': students, 'attempts': attempts, 'day_results': day_results.values(), 'categories': QuizCategory.objects.all()})
+		categories = QuizCategory.objects.all()
+		return render(request, 'quiz/admin_dashboard.html', {'students': students, 'categories': categories})
 	categories = QuizCategory.objects.filter(is_active=True).prefetch_related('questions')
 	student_attempts = list(Attempt.objects.filter(student=request.user).select_related('category'))
 	attempts = {attempt.category_id: attempt for attempt in student_attempts}
@@ -67,6 +56,46 @@ def day_questions(request, day):
 	if not categories.exists():
 		return redirect('dashboard')
 	return render(request, 'quiz/day_questions.html', {'day': day, 'categories': categories})
+
+
+@login_required
+@user_passes_test(staff_only)
+def edit_day(request, day):
+	categories = QuizCategory.objects.filter(day=day)
+	if not categories.exists():
+		return redirect('dashboard')
+	if request.method == 'POST':
+		new_day = request.POST.get('day', '').strip()
+		try:
+			new_day = int(new_day)
+			if new_day < 1:
+				raise ValueError
+			categories.update(day=new_day)
+		except ValueError:
+			messages.error(request, 'Please enter a valid day number.')
+		else:
+			messages.success(request, f'Day {day} updated to Day {new_day}.')
+			return redirect('day_questions', day=new_day)
+	return render(request, 'quiz/edit_day.html', {'day': day})
+
+
+@login_required
+@user_passes_test(staff_only)
+def delete_day(request, day):
+	categories = QuizCategory.objects.filter(day=day)
+	if request.method == 'POST':
+		deleted_count = categories.count()
+		categories.delete()
+		messages.success(request, f'Day {day} and its {deleted_count} categor{"y" if deleted_count == 1 else "ies"} deleted successfully.')
+	return redirect('dashboard')
+
+
+@login_required
+@user_passes_test(staff_only)
+def student_detail(request, student_id):
+	student = get_object_or_404(User, id=student_id, is_staff=False)
+	attempts = Attempt.objects.filter(student=student).select_related('category').order_by('category__day', 'category__name')
+	return render(request, 'quiz/student_detail.html', {'student': student, 'attempts': attempts})
 
 
 @login_required
@@ -108,28 +137,72 @@ def add_category(request):
 
 @login_required
 @user_passes_test(staff_only)
+def edit_category(request, category_id):
+	category = get_object_or_404(QuizCategory, id=category_id)
+	if request.method == 'POST':
+		name = request.POST.get('name', '').strip()
+		day = request.POST.get('day', '').strip()
+		description = request.POST.get('description', '').strip()
+		if not name or not day:
+			messages.error(request, 'Category name and day are required.')
+		else:
+			try:
+				category.name = name
+				category.day = int(day)
+				category.description = description
+				category.save()
+			except (ValueError, IntegrityError):
+				messages.error(request, 'Please enter a valid day.')
+			else:
+				messages.success(request, 'Category updated successfully.')
+				return redirect('day_questions', day=category.day)
+	return render(request, 'quiz/edit_category.html', {'category': category})
+
+
+@login_required
+@user_passes_test(staff_only)
+def delete_category(request, category_id):
+	category = get_object_or_404(QuizCategory, id=category_id)
+	if request.method == 'POST':
+		category.delete()
+		messages.success(request, 'Category and its questions deleted successfully.')
+	return redirect('dashboard')
+
+
+@login_required
+@user_passes_test(staff_only)
 def add_quiz(request):
 	categories = QuizCategory.objects.all()
 	days = QuizCategory.objects.values_list('day', flat=True).distinct().order_by('day')
 	if request.method == 'POST':
 		day = request.POST.get('day', '').strip()
 		category_id = request.POST.get('category_id', '').strip()
-		question_text = request.POST.get('question_text', '').strip()
-		if not day or not category_id or not question_text:
-			messages.error(request, 'Choose a day, category, and enter a question.')
+		question_texts = [text.strip() for text in request.POST.getlist('question_text')]
+		option_as = request.POST.getlist('option_a')
+		option_bs = request.POST.getlist('option_b')
+		option_cs = request.POST.getlist('option_c')
+		option_ds = request.POST.getlist('option_d')
+		correct_options = request.POST.getlist('correct_option')
+		question_count = len(question_texts)
+		if not day or not category_id or not question_count:
+			messages.error(request, 'Choose a day, category, and enter at least one question.')
+		elif any(not value.strip() for value in option_as + option_bs + option_cs + option_ds) or len(option_as) != question_count or len(option_bs) != question_count or len(option_cs) != question_count or len(option_ds) != question_count or len(correct_options) != question_count:
+			messages.error(request, 'Complete every field for each question.')
 		else:
 			try:
 				category = get_object_or_404(QuizCategory, id=category_id, day=int(day))
-				Question.objects.create(
-					category=category, text=question_text,
-					option_a=request.POST.get('option_a', ''), option_b=request.POST.get('option_b', ''),
-					option_c=request.POST.get('option_c', ''), option_d=request.POST.get('option_d', ''),
-					correct_option=request.POST.get('correct_option', 'A'),
-				)
+				with transaction.atomic():
+					for index in range(question_count):
+						Question.objects.create(
+							category=category, text=question_texts[index],
+							option_a=option_as[index].strip(), option_b=option_bs[index].strip(),
+							option_c=option_cs[index].strip(), option_d=option_ds[index].strip(),
+							correct_option=correct_options[index],
+						)
 			except (ValueError, IntegrityError):
 				messages.error(request, 'Please enter a valid day and question details.')
 			else:
-				messages.success(request, 'Question added to the category.')
+				messages.success(request, f'{question_count} question(s) added to the category.')
 				return redirect('add_quiz')
 	return render(request, 'quiz/add_quiz.html', {'categories': categories, 'days': days})
 

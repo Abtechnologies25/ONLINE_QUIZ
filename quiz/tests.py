@@ -28,6 +28,24 @@ class QuizManagementTests(TestCase):
 
 		self.assertEqual(self.category.questions.count(), 2)
 
+	def test_can_add_multiple_questions_in_one_submission(self):
+		data = {
+			'day': self.category.day,
+			'category_id': self.category.id,
+			'question_text': ['What is Python?', 'What is Django?'],
+			'option_a': ['A1', 'A2'],
+			'option_b': ['B1', 'B2'],
+			'option_c': ['C1', 'C2'],
+			'option_d': ['D1', 'D2'],
+			'correct_option': ['A', 'B'],
+		}
+
+		response = self.client.post('/quizzes/add/', data)
+
+		self.assertRedirects(response, '/quizzes/add/')
+		self.assertEqual(self.category.questions.count(), 2)
+		self.assertEqual(list(self.category.questions.values_list('text', flat=True)), ['What is Python?', 'What is Django?'])
+
 	def test_can_edit_and_delete_question(self):
 		question = Question.objects.create(category=self.category, text='Old question', option_a='A', option_b='B', option_c='C', option_d='D', correct_option='A')
 
@@ -62,6 +80,30 @@ class CategoryManagementTests(TestCase):
 
 		self.assertRedirects(response, '/quizzes/add/')
 		self.assertTrue(QuizCategory.objects.filter(name='Django', day=2).exists())
+
+	def test_staff_can_edit_category(self):
+		admin = User.objects.create_user(username='admin', password='password', is_staff=True)
+		category = QuizCategory.objects.create(name='Python', day=1)
+		self.client.force_login(admin)
+
+		response = self.client.post(f'/categories/{category.id}/edit/', {'name': 'Advanced Python', 'day': 2, 'description': 'Updated'})
+
+		self.assertRedirects(response, '/days/2/')
+		category.refresh_from_db()
+		self.assertEqual(category.name, 'Advanced Python')
+		self.assertEqual(category.day, 2)
+
+	def test_staff_can_delete_category_and_questions(self):
+		admin = User.objects.create_user(username='admin', password='password', is_staff=True)
+		category = QuizCategory.objects.create(name='Python', day=1)
+		question = Question.objects.create(category=category, text='Question', option_a='A', option_b='B', option_c='C', option_d='D', correct_option='A')
+		self.client.force_login(admin)
+
+		response = self.client.post(f'/categories/{category.id}/delete/')
+
+		self.assertRedirects(response, '/')
+		self.assertFalse(QuizCategory.objects.filter(id=category.id).exists())
+		self.assertFalse(Question.objects.filter(id=question.id).exists())
 
 
 class StudentDashboardTests(TestCase):
@@ -112,15 +154,18 @@ class AdminDashboardTests(TestCase):
 		admin = User.objects.create_user(username='admin', password='password', is_staff=True)
 		QuizCategory.objects.create(name='Python', day=1)
 		QuizCategory.objects.create(name='Django', day=1)
+		student = User.objects.create_user(username='student', password='password')
 		self.client.force_login(admin)
 
 		response = self.client.get('/')
 		content = response.content.decode()
 
+		self.assertContains(response, 'Student list')
+		self.assertContains(response, 'student')
+		self.assertContains(response, f'/students/{student.id}/')
+		self.assertContains(response, 'Quiz library by day')
 		self.assertEqual(content.count('DAY 01'), 1)
 		self.assertIn('/days/1/', content)
-		self.assertNotIn('<h3>Python</h3>', content)
-		self.assertNotIn('<h3>Django</h3>', content)
 
 	def test_admin_sees_one_percentage_for_a_student_day(self):
 		admin = User.objects.create_user(username='admin', password='password', is_staff=True)
@@ -133,5 +178,45 @@ class AdminDashboardTests(TestCase):
 
 		response = self.client.get('/')
 
-		self.assertContains(response, 'Student results by day')
-		self.assertContains(response, '62%')
+		self.assertContains(response, 'Student list')
+		self.assertContains(response, f'/students/{student.id}/')
+
+	def test_admin_can_view_student_quiz_details(self):
+		admin = User.objects.create_user(username='admin', password='password', is_staff=True)
+		student = User.objects.create_user(username='student', password='password')
+		category = QuizCategory.objects.create(name='Python', day=1)
+		Attempt.objects.create(student=student, category=category, score=3, total_questions=4)
+		self.client.force_login(admin)
+
+		response = self.client.get(f'/students/{student.id}/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'student')
+		self.assertContains(response, 'Python')
+		self.assertContains(response, '3/4')
+		self.assertContains(response, '75%')
+
+	def test_staff_can_edit_day_for_all_categories(self):
+		admin = User.objects.create_user(username='admin', password='password', is_staff=True)
+		first_category = QuizCategory.objects.create(name='Python', day=1)
+		second_category = QuizCategory.objects.create(name='Django', day=1)
+		self.client.force_login(admin)
+
+		response = self.client.post('/days/1/edit/', {'day': 2})
+
+		self.assertRedirects(response, '/days/2/')
+		self.assertEqual(set(QuizCategory.objects.values_list('day', flat=True)), {2})
+		self.assertEqual(first_category.name, QuizCategory.objects.get(name='Python').name)
+		self.assertEqual(second_category.name, QuizCategory.objects.get(name='Django').name)
+
+	def test_staff_can_delete_day_and_all_categories(self):
+		admin = User.objects.create_user(username='admin', password='password', is_staff=True)
+		category = QuizCategory.objects.create(name='Python', day=1)
+		Question.objects.create(category=category, text='Question', option_a='A', option_b='B', option_c='C', option_d='D', correct_option='A')
+		self.client.force_login(admin)
+
+		response = self.client.post('/days/1/delete/')
+
+		self.assertRedirects(response, '/')
+		self.assertFalse(QuizCategory.objects.filter(day=1).exists())
+		self.assertFalse(Question.objects.exists())

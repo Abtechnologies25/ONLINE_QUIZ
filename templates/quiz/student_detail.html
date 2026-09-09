@@ -1,0 +1,6 @@
+{% extends 'quiz/base.html' %}
+{% block title %}{{ student.username }} | Student details{% endblock %}
+{% block content %}
+<div class="page-heading"><div><a class="back-link" href="{% url 'dashboard' %}">← Student list</a><p class="eyebrow">STUDENT PERFORMANCE</p><h1>{{ student.get_full_name|default:student.username }}</h1><p class="muted">Quiz attendance and results for <strong>{{ student.username }}</strong>.</p></div></div>
+<section class="panel"><div class="panel-heading"><h2>Quiz details</h2><span class="pill">{{ attempts|length }} completed</span></div><div class="table-wrap"><table><thead><tr><th>Day</th><th>Category</th><th>Score</th><th>Percentage</th><th>Completed</th></tr></thead><tbody>{% for attempt in attempts %}<tr><td>Day {{ attempt.category.day }}</td><td><strong>{{ attempt.category.name }}</strong></td><td>{{ attempt.score }}/{{ attempt.total_questions }}</td><td><span class="score">{{ attempt.percentage }}%</span></td><td>{{ attempt.finished_at|date:'d M Y, h:i A' }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">This student has not attended any quiz yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}
