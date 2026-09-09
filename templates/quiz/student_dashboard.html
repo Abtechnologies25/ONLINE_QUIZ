@@ -1,0 +1,7 @@
+{% extends 'quiz/base.html' %}
+{% load quiz_tags %}
+{% block title %}My dashboard | Daymark{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">STUDENT SPACE</p><h1>Ready when you are, {{ user.username }}.</h1><p class="muted">Choose a quiz day and put your learning to work.</p></div></div>
+<div class="quiz-grid">{% regroup categories by day as day_groups %}{% for day_group in day_groups %}<article class="quiz-card"><div class="day-badge">DAY {{ day_group.grouper|stringformat:'02d' }}</div>{% with day_result=day_results|get_item:day_group.grouper %}{% if day_result %}<div class="day-result"><span>Day percentage</span><strong>{{ day_result.percentage }}%</strong><small>{{ day_result.score }}/{{ day_result.total_questions }} marks</small></div>{% endif %}{% endwith %}{% for category in day_group.list %}<div class="student-category"><h2>{{ category.name }}</h2><p class="muted">{{ category.description|default:'Complete this assessment to record your progress.' }}</p><div class="quiz-meta"><span>{{ category.questions.count }} question{{ category.questions.count|pluralize }}</span></div>{% with attempt=attempts|get_item:category.id %}{% if attempt %}<div class="completed">Completed</div>{% else %}<a class="button primary full" href="{% url 'take_quiz' category.id %}">Start {{ category.name }} <span>→</span></a>{% endif %}{% endwith %}</div>{% endfor %}</article>{% empty %}<div class="empty panel">No quizzes are available yet. Check back soon.</div>{% endfor %}</div>
+{% endblock %}
